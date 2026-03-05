@@ -1,0 +1,8 @@
+*** STEPS ***
+
+1. copy both files from here to C:\temp folder on the machine 
+where you want to reinstall the sccmclient.
+2. open Powershell as admin and run CM_ClientRepairScript.ps1 script. 
+3. you can go ahead and clean the CCMCache as well (doesn't matter if it's before or after running script), reboot the machine
+C:\Windows\CCMCache
+(Delete entire folder)
