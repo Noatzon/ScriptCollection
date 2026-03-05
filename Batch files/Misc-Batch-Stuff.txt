@@ -1,0 +1,181 @@
+=======================================================================================================================
+
+			GODD TO KNOW VARIABLES /CODE SNIPPETS
+
+set "RootDir=%~dp0"
+cls ← ClearScreen
+
+		ROBO COPY PARAMETERS
+	info: 
+	https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy
+	https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/xcopy
+		https://stackoverflow.com/questions/30651776/xcopy-returns-error-invalid-number-of-parameters-when-exclude-parameter-is-set
+		https://stackoverflow.com/questions/25548431/getting-xcopy-to-concatenate-append#comment100504860_25548431
+	https://stackoverflow.com/questions/4137688/batch-file-copy-contents-of-1-file-into-another
+rem robocopy parameter breakdown:** COPY OPTIONS ** [/zb] = restartable mode, if acess is denied switches to backup mode. Allows robocopy to restart where it was interupted and also overwrite permissions if needed.	[/e] = Copies subdirectories & include empty ones.	[/xx] = exclude extra. If used in conjunction with /Purge or /Mir, will prevent any files being deleted from the destination. Also prevents extra files from being listed in log.
+rem													[/mt:] = Creates multi-threaded copies with n threads. 8 is standard.	[/r] = Retries in case of errors.	[/W] = wait time between retries.
+rem								 ** SELECTION ** [/xo] = Source files older than destination are excluded.	[/is] & [/it] = Include the same & tweaked files. USed in some instances to ensure it "overwrites" any existing "settings".
+rem								 **	LOGGING ** [/v] = Verbose, shows all skipped files too.	[/np] = Progress won't be displayed.	[/log+:] = Append new entries to LogFile.
+robocopy "<SOURCE>" "<DESTINATION>" /zb /e /mt:8 /r:3 /w:5 /v /np /log+:"%LogFile%"
+
+
+
+		PERMISSIONS
+	Info: https://petri.com/icacls-command/  and  https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls
+rem Giving the correct permissions to the directory. We give the standard group "Users"("Användare", as this is intended for Sweden/Swedish), "Modify" rights. The other ones ensure the rights are Inherrited from parent.
+icacls "<FOLDER PATH>" /grant:r BUILTIN\Användare:(OI)(CI)M /t /c
+
+
+		CHOICE / LIST OF OPTIONS
+	info:
+	https://www.computerhope.com/issues/ch001674.htm
+	https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/choice
+		https://stackoverflow.com/questions/65568800/how-do-i-take-a-user-input-in-bat-script
+		https://stackoverflow.com/questions/7879791/how-to-read-input-from-console-in-a-batch-file
+		
+rem "List" has to be written in reverse order, with last option being the top errorlevel. Errorlevel 255 is the built-in one in case it detects an actual error.
+rem Parameter breakdown: [/C:] = List all the available choices and what key is ascosiated with it. Can be a letter or number. 
+						 [/N] = Hide the (list) of choices from user.
+						 [/M] = "Message", Specifies a message to display before the list of choices.
+
+choice /c:yn /n /m "<Question for user>"
+rem The "n" choice
+if %errorlevel% == 2 (
+
+)
+rem The "y" choice
+if %errorlevel% == 1 (
+
+)
+
+
+		FOLDER CREATION / VERIFICATION
+rem	"PATH" is full path including name of folder you wish to create / look up. Example: "C:\Program Files\Business Objects"
+if not exist "<PATH>" (
+	mkdir "<PATH>"
+rem On failure:
+		if not exist "<PATH>" (echo Failed to create '~~' folder >> "%LogFile%"
+				color c
+				echo Failed when trying to create folder, '~~'.
+				pause
+				endlocal
+				exit
+			)
+rem On success:		
+	echo Created '~~' folder >> "%LogFile%"
+	)
+
+rem Runs a check on one of the folders that should've been created as a quick test to see if it's been installed. Shortform of above code snippet.
+If exist "<folder path>" (
+	echo <folder> exist >> "%LogFile%"
+)
+
+
+
+=======================================================================================================================
+
+
+				CODE SNIPPET TO GET DIFFERENT SIGNED IN USER
+
+rem find the username of the one logged in, not who's running the script.
+for /f "tokens=1,2 delims=\" %%r in ('powershell -command "(Get-WMIObject -class Win32_ComputerSystem | select username)"') do set "usrname=%%s"
+rem Here we go! This gets the [full path] for local machine and our user, correct SID
+for /f "delims=" %%g in ('powershell -command "(ls 'hklm:software/microsoft/windows nt/currentversion/profilelist' | ? {$_.getvalue('ProfileImagePath') -match '%usrname%'} | select Name)"') do set "bread=%%g"
+rem Cutting of and keeping only the SID from our previous result.
+for /f "tokens=6* delims=\" %%i in ("%bread%") do set "R_USER=%%j"
+
+=======================================================================================================================
+
+
+		BUILDING OWN REG FILE
+rem Ensuring it adds the keys & values to the correct user. Currently this will only work for a single user logged in on the computer. Need to change the lines in the snippet that gets a different signed user to output a text file with all users found. Then run below for each one inside it or something simiar.
+
+(
+	echo Windows Registry Editor Version 5.00
+	echo.
+) > "%file%"
+rem "Type" displays a txt file (typically). Here's it's used to pass the additional reg settings to our main file that we don't want to show as plaintext inside script. Those settings are stored in a tempalte/premade .reg file that already exist in the script folder/-s.
+Type "%preset%" >> "%file%"
+echo. >> "%file%"
+
+rem Otherwise, you create the reg file as a tempalte and can just use variables for fields that you wish to be dynamic. For 
+(
+	echo.
+	echo [%loaf%\<FOLDER/PLACE TO INSERT DATA>]
+	echo "<Name>"=dword:<Data>
+	echo "<Name>"="<Data>"
+	echo "AutoAdminLogon"="1"
+	echo.
+
+	echo [%loaf%\]
+	echo "RulesCount"=dword:00000000
+	echo "UseTranslation"=dword:00000000
+	echo.
+
+	echo [%loaf%\]
+) >> "%file%"
+rem there needs to be a blank line at end of all reg files.
+echo. >> "%file%"
+
+rem /s for silent import of reg file.
+regedit /s "%Regkey%\tempcoll.reg"
+
+
+=======================================================================================================================
+
+color 0f
+rem F is "Bright White". 0 is "Black". You specify Background & then optionally Foreground. Foreground is textcolour. Colours: https://www.robvanderwoude.com/ntcolor.php
+rem You can only set the color for the entire window. Only way to update it between text is with a pause, cls or similar.
+
+
+
+=======================================================================================================================
+
+					LOG FILE CREATION
+rem Create Log file
+rem Tweak path variable for desired log location, default is "C:\Users\USERNAME\<logfilename>"
+set "LogFilePath=%userprofile%\"
+for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+set "YY=%dt:~2,2%" & set "YYYY=%dt:~0,4%" & set "MM=%dt:~4,2%" & set "DD=%dt:~6,2%"
+set "HH=%dt:~8,2%" & set "Min=%dt:~10,2%" & set "Sec=%dt:~12,2%"
+set "fullstamp=%YYYY%-%MM%-%DD%_%HH%%Min%-%Sec%"
+set "LogFile=%LogFilePath%%fullstamp%.log"
+
+
+=======================================================================================================================
+Scrapped error handlnig concept
+See https://ss64.com/nt/syntax-error.html
+
+REM ERROR HANDLING ROUTINE
+rem If script encounters an error it'll try to set a custom errorcode and then go to the error handling portion of the script.
+
+:ErrorMessage
+rem universal breakpoint in case script encounters errors.
+echo Script encountered an error and had to be terminated >> "%LogFile%"
+echo Error: %Errorcode% >> "%LogFile%%"
+cls
+color c
+echo Installer encounter an unexpectecd error and had to exit!
+color f
+set /p errorexit= Please contact IT Support for help.
+=======================================================================================================================
+rem Computer\HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList -list of all users that have logged in to the device. "ProfileImagePath" contains the username linked to the SID. Example "C:\Users\a829605"
+=======================================================================================================================
+rem SID for my account
+rem HKEY_USERS\${sid}\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Taskband
+======================================================================================================================
+
+REM gets user running the script:
+REM for /f "tokens=1,2 delims=\" %%a in ('powershell -command "(Get-WMIObject -class Win32_ComputerSystem | select username)"') do set "currentuser=%%b"
+REM echo  Script run by: %currentuser%
+set /p Delay =
+
+=======================================================================================================================
+rem Easier is to just get the package to call on this one as admin and the other as user.
+rem gets the user logged in and not admin who's running the script. No longer needed/used.
+	REM for /f "TOKENS=1,2,*" %%a in ('tasklist /FI "IMAGENAME eq explorer.exe" /FO LIST /V') do if /i "%%a %%b"=="User Name:" set _currdomain_user=%%c
+	REM for /f "TOKENS=1,2 DELIMS=\" %%a in ("%_currdomain_user%") do set _currdomain=%%a & set _curruser=%%b
+	REM echo logged in as %_curruser% >> "%LogFile%"
+		rem untested powershell version: set currentuser = powershell -c "(WMIC /NODE:'%COMPUTERNAME%' COMPUTERSYSTEM GET USERNAME)"
+	REM echo.
+=======================================================================================================================
